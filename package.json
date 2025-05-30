@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "cypress": "^14.3.3"
+  }
+}

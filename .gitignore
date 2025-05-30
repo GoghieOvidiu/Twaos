@@ -1,0 +1,50 @@
+# Python-specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.env
+*.egg-info/
+dist/
+build/
+*.log
+
+# Docker-specific
+*.dockerignore
+Dockerfile.*
+docker-compose.override.yml
+
+# Database-specific
+*.sqlite3
+*.db
+postgres_data/
+
+# Generated files
+*.xlsx
+*.csv
+
+# IDE-specific
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Node.js-specific (Frontend)
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+build/
+*.lock  # yarn.lock sau package-lock.json, dacă nu dorești să le versiuni
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Alte fișiere temporare
+*.bak
+*.swp
+*~

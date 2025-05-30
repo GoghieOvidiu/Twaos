@@ -1,0 +1,80 @@
+version: '3.8'
+
+networks:
+  app-network:
+    driver: bridge
+
+services:
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sippec_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  create_db:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: >
+      sh -c "apt-get update && 
+             apt-get install -y postgresql-client &&
+             while ! pg_isready -h db -U postgres; do sleep 1; done &&
+             python create_db.py"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+      create_db:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+      - "5001:5000"
+    volumes:
+      - ./backend:/app
+    environment:
+      FLASK_APP: app.py
+      FLASK_ENV: development
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: sippec_db
+    command: sh -c "uvicorn app.api:app --host 0.0.0.0 --port 8000 & python -m flask --app app run --host 0.0.0.0 --port 5000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+    command: npm start
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
