@@ -6,6 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { Container } from "@mui/material";
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import Navbar from "./components/Navbar"; // Import the Navbar component
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
@@ -13,64 +14,50 @@ import ExamRequests from "./components/ExamRequests";
 import Profile from "./components/Profile";
 import useAuthStore from "./store/authStore";
 import Register from './components/Register'; // Import the Register component
+import ProtectedRoute from './components/ProtectedRoute';
 
 import "./App.css";
 
-function ProtectedRoute({ children }) {
-  const { token } = useAuthStore();
-  return token ? children : <Navigate to="/login" />;
-  //return children;
-}
-
 function App() {
-  const { loadToken } = useAuthStore();
+  const { loadToken, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
     loadToken();
   }, [loadToken]);
 
   return (
-    <Router>
-      <Navbar /> {/* Add the Navbar here */}
-      <Container>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} /> {/* Add the Register route */}
-          <Route
-            path="/dashboard"
-            element={
+    <GoogleOAuthProvider clientId="444468629856-hogjqe3aeggukmurso0lfhfpom0p11ks.apps.googleusercontent.com">
+      <Router>
+        <Navbar /> {/* Add the Navbar here */}
+        <Container>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={!isAuthenticated() ? <Login /> : <Navigate to="/dashboard" replace />} />
+            <Route path="/register" element={!isAuthenticated() ? <Register /> : <Navigate to="/dashboard" replace />} />
+            
+            {/* Protected routes */}
+            <Route path="/dashboard" element={
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/exam-requests"
-            element={
+            } />
+            <Route path="/exam-requests" element={
               <ProtectedRoute>
                 <ExamRequests />
               </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile"
-            element={
+            } />
+            <Route path="/profile" element={
               <ProtectedRoute>
                 <Profile />
               </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </Container>
-    </Router>
+            } />
+            
+            {/* Redirect root to dashboard if authenticated, otherwise to login */}
+            <Route path="/" element={<Navigate to={isAuthenticated() ? "/dashboard" : "/login"} replace />} />
+          </Routes>
+        </Container>
+      </Router>
+    </GoogleOAuthProvider>
   );
 }
 

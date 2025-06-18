@@ -1,10 +1,18 @@
 import requests
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
-from app.models import Classroom
+from app.models import Classroom, ExamSchedule, Base
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+import os
 
 # URL to fetch classroom data
 CLASSROOMS_URL = "https://orar.usv.ro/orar/vizualizare/data/sali.php?json"
+
+# Database connection
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/sippec_db")
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def fetch_classrooms():
     """Fetch classroom data from the URL."""
@@ -13,7 +21,7 @@ def fetch_classrooms():
     return response.json()
 
 def populate_classrooms():
-    """Populate the classrooms table with data from the URL."""
+    """Delete all classrooms and repopulate the table with data from the URL."""
     # Fetch classroom data
     classrooms_data = fetch_classrooms()
 
@@ -21,32 +29,65 @@ def populate_classrooms():
     db: Session = SessionLocal()
 
     try:
-        for classroom in classrooms_data:
-            # Extract relevant fields (adjust keys based on the JSON structure)
-            if(classroom.get("name") == None):
-                continue
-            name = classroom.get("name")  # Replace "name" with the actual key
-            capacity = classroom.get("capacitate")  # Replace "capacity" with the actual key
+        # Delete all existing classrooms
+        db.query(Classroom).delete()
+        db.commit()
 
-            # Check if the classroom already exists
-            existing_classroom = db.query(Classroom).filter(Classroom.name == name).first()
-            if existing_classroom:
-                continue  # Skip if the classroom already exists
+        for classroom in classrooms_data:
+            # Skip if name is None or empty
+            if not classroom.get("name"):
+                continue
+            # Extract and convert fields
+            name = classroom.get("name")
+            short_name = classroom.get("shortName")
+            building_name = classroom.get("buildingName")
+            try:
+                capacity = int(classroom.get("capacitate") or 0)
+            except Exception:
+                capacity = 0
+            try:
+                computers = int(classroom.get("computers") or 0)
+            except Exception:
+                computers = 0
 
             # Create a new Classroom object
-            new_classroom = Classroom(name=name, capacity=capacity)
+            new_classroom = Classroom(
+                name=name,
+                short_name=short_name,
+                building_name=building_name,
+                capacity=capacity,
+                computers=computers
+            )
 
             # Add to the database session
             db.add(new_classroom)
 
         # Commit the transaction
         db.commit()
-        print("Classrooms added successfully!")
+        print("Classrooms table repopulated successfully!")
     except Exception as e:
         db.rollback()
         print(f"An error occurred: {e}")
     finally:
         db.close()
 
+def delete_all_classrooms():
+    db = SessionLocal()
+    try:
+        # First delete all exam schedules that reference classrooms
+        db.query(ExamSchedule).delete()
+        db.commit()
+        
+        # Then delete all classrooms
+        db.query(Classroom).delete()
+        db.commit()
+        print("Successfully deleted all classrooms and their associated exam schedules")
+    except Exception as e:
+        db.rollback()
+        print(f"An error occurred: {str(e)}")
+    finally:
+        db.close()
+
 if __name__ == "__main__":
+    delete_all_classrooms()
     populate_classrooms()

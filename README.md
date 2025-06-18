@@ -5,7 +5,7 @@ How to run:
  - check if db runs: docker exec -it sippec-db-1 psql -U postgres -d sippec_db
  - check if db runs: docker exec -it exam-scheduler-main-db-1 psql -U postgres -d sippec_db
  
-
+ - path to Docker: $env:Path += ";C:\Program Files\Docker\Docker\resources\bin"
 
 
  SIMPLE APP

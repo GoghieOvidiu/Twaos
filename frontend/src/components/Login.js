@@ -1,16 +1,23 @@
-import React, { useState } from 'react';
-import { TextField, Button, Box, Typography, Alert } from '@mui/material';
+import React, { useState, useEffect } from 'react';
+import { TextField, Button, Box, Typography, Alert, Divider } from '@mui/material';
 import useAuthStore from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
+import GoogleLoginButton from './GoogleLoginButton';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const login = useAuthStore(state => state.login);
+  const { login, isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,9 +34,13 @@ function Login() {
       });
 
       const { access_token } = response.data;
-      await login(email, access_token); // Update store with token and user
-      setError('');
-      navigate('/dashboard');
+      const success = await login(email, access_token); // Update store with token and user
+      if (success) {
+        setError('');
+        navigate('/dashboard');
+      } else {
+        setError('Failed to load user data');
+      }
     } catch (error) {
       setError('Invalid email or password');
       console.error('Login failed:', error);
@@ -60,6 +71,13 @@ function Login() {
           Login
         </Button>
       </form>
+      
+      <Divider sx={{ my: 3 }}>OR</Divider>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+        <GoogleLoginButton />
+      </Box>
+
       <Typography variant="body2" sx={{ mt: 2 }}>
         Don't have an account? <Link to="/register">Register here</Link>
       </Typography>
