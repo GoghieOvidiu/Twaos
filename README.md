@@ -7,10 +7,30 @@ How to run:
  
  - path to Docker: $env:Path += ";C:\Program Files\Docker\Docker\resources\bin"
 
+### Database Setup
+1. Start the database:
+```bash
+docker-compose up -d db
+```
 
- SIMPLE APP
- 
- Backend
+2. Apply database migrations:
+```bash
+cd backend
+alembic upgrade head
+```
+
+3. Populate the database with initial data:
+```bash
+python populate_db.py
+```
+
+This will:
+- Create all necessary tables
+- Populate groups from USV API
+- Add teachers
+- Add classrooms
+
+### Backend Setup
  - python3 -m venv venv
  - source venv/bin/activate
  - pip install fastapi uvicorn sqlalchemy psycopg2-binary alembic sphinx
