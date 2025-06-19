@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
@@ -152,6 +152,49 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "444468629856-hogjqe3aeggukmurs
 class GoogleAuthRequest(BaseModel):
     token: str
 
+class BulkStudent(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+
+class BulkStudentResult(BaseModel):
+    created: list[str]
+    skipped: list[str]
+
+class CadreResponse(BaseModel):
+    id: int
+    id2: Optional[str] = None
+    lastName: Optional[str] = None
+    firstName: Optional[str] = None
+    emailAddress: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    facultyName: Optional[str] = None
+    departmentName: Optional[str] = None
+    class Config:
+        orm_mode = True
+
+class CadreUpdate(BaseModel):
+    lastName: Optional[str] = None
+    firstName: Optional[str] = None
+    emailAddress: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    facultyName: Optional[str] = None
+    departmentName: Optional[str] = None
+
+class SecretaryCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+
+class BulkSecretary(BaseModel):
+    first_name: str
+    last_name: str
+    email: str
+
+class BulkSecretaryResult(BaseModel):
+    created: list[str]
+    skipped: list[str]
+
 # Helper functions for authentication
 def verify_password(plain_password, hashed_password):
     """Verify a plain password against a hashed password."""
@@ -190,20 +233,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @app.post("/login", response_model=Token, summary="User login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     """Authenticate a user and return a JWT token.
-    
-    Args:
-        form_data: Username (email) and password.
-        db: Database session.
-    
-    Returns:
-        A JWT token.
-    
-    Raises:
-        HTTPException: If credentials are invalid.
+    Only users with type ADMIN can log in with email and password.
     """
     user = db.query(models.User).filter(models.User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    if user.type.upper() != "ADMIN":
+        raise HTTPException(status_code=401, detail="Only ADMIN users can log in with email and password. Please use Google login.")
     access_token = create_access_token(data={"sub": user.email})
     return {"access_token": access_token, "token_type": "bearer"}
 
@@ -234,24 +270,7 @@ async def google_auth(request: GoogleAuthRequest, db: Session = Depends(database
             print(f"Found existing user: {user.email} (ID: {user.id})")
         else:
             print(f"No existing user found for email: {email}")
-            # Create new user
-            try:
-                user = models.User(
-                    email=email,
-                    first_name=first_name,
-                    last_name=last_name,
-                    password=get_password_hash("google_oauth"),  # Set a random password
-                    role="student",  # Default role
-                    type="STUDENT"   # Use string instead of enum
-                )
-                db.add(user)
-                db.commit()
-                db.refresh(user)
-                print(f"Successfully created new user: {user.email} (ID: {user.id})")
-            except Exception as e:
-                print(f"Error creating user: {str(e)}")
-                db.rollback()
-                raise
+            raise HTTPException(status_code=401, detail="User not registered. Please contact the secretary.")
         
         # Create access token
         access_token = create_access_token(data={"sub": user.email})
@@ -329,6 +348,69 @@ def update_user(user_id: int, user: UserCreate, db: Session = Depends(database.g
     db.commit()
     db.refresh(db_user)
     return db_user
+
+@app.post("/users/bulk_upload/", response_model=BulkStudentResult, summary="Bulk upload students")
+def bulk_upload_students(students: List[BulkStudent] = Body(...), db: Session = Depends(database.get_db)):
+    created = []
+    skipped = []
+    for student in students:
+        if not student.email.endswith("@student.usv.ro"):
+            skipped.append(student.email)
+            continue
+        db_user = db.query(models.User).filter(models.User.email == student.email).first()
+        if db_user:
+            skipped.append(student.email)
+            continue
+        user = models.User(
+            first_name=student.first_name,
+            last_name=student.last_name,
+            email=student.email,
+            password=get_password_hash("student123"),
+            role="student",
+            type="STUDENT"
+        )
+        db.add(user)
+        created.append(student.email)
+    db.commit()
+    return BulkStudentResult(created=created, skipped=skipped)
+
+@app.post("/users/secretary", response_model=UserResponse, summary="Add a new secretary user")
+def add_secretary_user(secretary: SecretaryCreate, db: Session = Depends(database.get_db)):
+    if db.query(models.User).filter(models.User.email == secretary.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    user = models.User(
+        first_name=secretary.first_name,
+        last_name=secretary.last_name,
+        email=secretary.email,
+        password=get_password_hash("secretary123"),
+        role="secretary",
+        type="SECRETARY"
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+@app.post("/users/secretary/bulk", response_model=BulkSecretaryResult, summary="Bulk add secretaries")
+def bulk_add_secretaries(secretaries: List[BulkSecretary] = Body(...), db: Session = Depends(database.get_db)):
+    created = []
+    skipped = []
+    for sec in secretaries:
+        if db.query(models.User).filter(models.User.email == sec.email).first():
+            skipped.append(sec.email)
+            continue
+        user = models.User(
+            first_name=sec.first_name,
+            last_name=sec.last_name,
+            email=sec.email,
+            password=get_password_hash("secretary123"),
+            role="secretary",
+            type="SECRETARY"
+        )
+        db.add(user)
+        created.append(sec.email)
+    db.commit()
+    return BulkSecretaryResult(created=created, skipped=skipped)
 
 # Group endpoints
 @app.post("/groups/", response_model=GroupResponse, summary="Create a new group")
@@ -507,8 +589,6 @@ def update_exam_schedule(exam_id: int, exam: ExamScheduleCreate, db: Session = D
     db.refresh(db_exam)
     return db_exam
 
-
-
 # Notification endpoints
 @app.post("/notifications/", response_model=NotificationResponse, summary="Create a new notification")
 def create_notification(notification: NotificationCreate, db: Session = Depends(database.get_db)):
@@ -603,3 +683,67 @@ def get_teacher_courses(teacher_id: str, db: Session = Depends(database.get_db))
         raise HTTPException(status_code=500, detail=f"Failed to fetch courses from USV API: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+@app.get("/cadre/", response_model=List[CadreResponse], summary="Get all cadre records")
+def get_all_cadre(db: Session = Depends(database.get_db)):
+    return db.query(models.Cadre).all()
+
+@app.put("/cadre/{cadre_id}", response_model=CadreResponse, summary="Update a cadre record")
+def update_cadre(cadre_id: int, update: CadreUpdate, db: Session = Depends(database.get_db)):
+    cadre = db.query(models.Cadre).filter(models.Cadre.id == cadre_id).first()
+    if not cadre:
+        raise HTTPException(status_code=404, detail="Cadre not found")
+    for key, value in update.dict(exclude_unset=True).items():
+        setattr(cadre, key, value)
+    db.commit()
+    db.refresh(cadre)
+    return cadre
+
+CADRE_URL = "https://orar.usv.ro/orar/vizualizare/data/cadre.php?json"
+
+@app.post("/cadre/populate/", summary="Clear and repopulate Cadre table from USV API")
+def populate_cadre_table(db: Session = Depends(database.get_db)):
+    try:
+        # Fetch cadre data
+        response = requests.get(CADRE_URL)
+        response.raise_for_status()
+        cadre_data = response.json()
+        # Delete all existing records
+        db.query(models.Cadre).delete()
+        db.commit()
+        count = 0
+        for cadre in cadre_data:
+            if not cadre.get("id"):
+                continue
+            new_cadre = models.Cadre(
+                id2=cadre.get("id"),
+                lastName=cadre.get("lastName"),
+                firstName=cadre.get("firstName"),
+                emailAddress=cadre.get("emailAddress"),
+                phoneNumber=cadre.get("phoneNumber"),
+                facultyName=cadre.get("facultyName"),
+                departmentName=cadre.get("departmentName")
+            )
+            db.add(new_cadre)
+            count += 1
+            # Add to users if not present and has valid email and names
+            email = cadre.get("emailAddress")
+            first_name = cadre.get("firstName") or ''
+            last_name = cadre.get("lastName") or ''
+            if email and email.strip() and first_name.strip() and last_name.strip():
+                if not db.query(models.User).filter(models.User.email == email).first():
+                    db.add(models.User(
+                        first_name=first_name,
+                        last_name=last_name,
+                        email=email,
+                        password=get_password_hash("teacher123"),
+                        role="teacher",
+                        type="TEACHER"
+                    ))
+                    db.commit()  # Commit after each user to avoid bulk issues
+                    #print(f"Added user: {email}")
+        db.commit()
+        return {"success": True, "added": count}
+    except Exception as e:
+        db.rollback()
+        return {"success": False, "error": str(e)}

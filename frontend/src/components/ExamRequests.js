@@ -16,13 +16,14 @@ import {
   IconButton,
   Tooltip
 } from '@mui/material';
-import { Edit as EditIcon } from '@mui/icons-material';
+import { Edit as EditIcon, Add as AddIcon } from '@mui/icons-material';
 import axios from 'axios';
 import useAuthStore from '../store/authStore';
 import moment from 'moment';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
+import ExamForm from './ExamForm';
 
 function ExamRequests() {
   const { token, user } = useAuthStore();
@@ -57,11 +58,21 @@ function ExamRequests() {
         const response = await axios.get('http://localhost:8080/exams_schedule/', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        // If user is a student, filter exams to show only those created by them
         if (user?.type === 'STUDENT') {
+          // Student: doar examenele proprii
           const studentExams = response.data.filter(exam => exam.student_id === user.id);
           setExams(studentExams);
+        } else if (user?.type === 'TEACHER') {
+          // Teacher: examene unde este titular (nume format ca în baza de date: firstName + ' ' + lastName)
+          const teacherFullName = `${user.first_name} ${user.last_name}`.replace(/\s+/g, ' ').trim().toLowerCase();
+          const teacherFullName1 = `${user.last_name} ${user.first_name}`.replace(/\s+/g, ' ').trim().toLowerCase();
+          const teacherExams = response.data.filter(exam => {
+            const titular = (exam.titular || '').replace(/\s+/g, ' ').trim().toLowerCase();
+            return titular === teacherFullName || titular === teacherFullName1;
+          });
+          setExams(teacherExams);
         } else {
+          // Restul: toate examenele
           setExams(response.data);
         }
       } catch (error) {
@@ -100,13 +111,25 @@ function ExamRequests() {
     XLSX.writeFile(workbook, 'ExamRequests.xlsx');
   };
 
-  // Export to PDF
-  const exportToPDF = () => {
+  // Export to PDF (toate examenele doar pentru admin/secretar)
+  const exportToPDF = async () => {
+    let dataToExport = exams;
+    if (user?.type === 'ADMIN' || user?.type === 'SECRETARY') {
+      try {
+        const response = await axios.get('http://localhost:8080/exams_schedule/', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        dataToExport = response.data;
+      } catch (error) {
+        console.error('Failed to fetch all exams for export:', error);
+        // Fallback: exportă doar examenele vizibile
+      }
+    }
     const doc = new jsPDF();
     doc.text('Exam Requests', 14, 10);
-    doc.autoTable({
+    autoTable(doc, {
       head: [['Group', 'Discipline', 'Titular', 'Asistent', 'Data', 'Ora', 'Sala']],
-      body: exams.map(exam => [
+      body: dataToExport.map(exam => [
         exam.group,
         exam.discipline,
         exam.titular,
@@ -172,7 +195,7 @@ function ExamRequests() {
       return; // Prevent submission if user is not authorized
     }
     try {
-      await axios.put(`http://localhost:8080/exams_schedule/${editingExam.id}`, editFormData, {
+      await axios.put(`http://localhost:8080/exams_schedule/${editingExam.id}`, { ...editFormData, student_id: editingExam.student_id }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -232,31 +255,25 @@ function ExamRequests() {
 
   return (
     <Box sx={{ mt: 4 }}>
-      <Typography variant="h4" gutterBottom>Exam Requests</Typography>
-      {!isStudent && (
-        <TextField
-          select
-          label="Filter by Course"
-          value={selectedCourse}
-          onChange={(e) => setSelectedCourse(e.target.value)}
-          sx={{ mb: 2, minWidth: 200 }}
-        >
-          <MenuItem value="">All Courses</MenuItem>
-          {courses.map(course => (
-            <MenuItem key={course.id} value={course.id}>{course.name}</MenuItem>
-          ))}
-        </TextField>
-      )}
+      <Typography variant="h4" gutterBottom>Programarea examenelor</Typography>
+      
       <Box sx={{ mb: 2 }}>
-        <Button variant="contained" color="primary" onClick={handleCreateClick} sx={{ mr: 2 }}>
-          Create New Exam
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={handleCreateClick}
+          sx={{ borderRadius: 2, mr: 2 }}
+        >
+          Add New Exam
         </Button>
         <Button variant="contained" color="primary" onClick={exportToExcel} sx={{ mr: 2 }}>
           Export to Excel
         </Button>
-        <Button variant="contained" color="primary" onClick={exportToPDF}>
-          Export to PDF
-        </Button>
+        {(user?.type === 'ADMIN' || user?.type === 'SECRETARY') && (
+          <Button variant="contained" color="primary" onClick={exportToPDF}>
+            Export to PDF
+          </Button>
+        )}
       </Box>
       <Table>
         <TableHead>
@@ -296,67 +313,16 @@ function ExamRequests() {
       </Table>
 
       {/* Create Exam Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)}>
+      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Create New Exam</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField
-              name="group"
-              label="Group"
-              value={createFormData.group}
-              onChange={handleCreateChange}
-              fullWidth
-            />
-            <TextField
-              name="discipline"
-              label="Discipline"
-              value={createFormData.discipline}
-              onChange={handleCreateChange}
-              fullWidth
-            />
-            <TextField
-              name="titular"
-              label="Titular"
-              value={createFormData.titular}
-              onChange={handleCreateChange}
-              fullWidth
-            />
-            <TextField
-              name="asistent"
-              label="Asistent"
-              value={createFormData.asistent}
-              onChange={handleCreateChange}
-              fullWidth
-            />
-            <TextField
-              name="data"
-              label="Data"
-              type="date"
-              value={createFormData.data}
-              onChange={handleCreateChange}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              name="ora"
-              label="Ora"
-              type="time"
-              value={createFormData.ora}
-              onChange={handleCreateChange}
-              fullWidth
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              name="sala"
-              label="Sala"
-              value={createFormData.sala}
-              onChange={handleCreateChange}
-              fullWidth
-            />
-            <Button variant="contained" onClick={handleCreateSubmit}>
-              Create
-            </Button>
-          </Box>
+          <ExamForm
+            onSubmit={exam => {
+              setExams([...exams, exam]);
+              setCreateDialogOpen(false);
+            }}
+            onCancel={() => setCreateDialogOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 

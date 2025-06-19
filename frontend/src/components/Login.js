@@ -15,7 +15,7 @@ function Login() {
 
   useEffect(() => {
     if (isAuthenticated()) {
-      navigate('/dashboard');
+      navigate('/exam-requests');
     }
   }, [isAuthenticated, navigate]);
 
@@ -37,7 +37,7 @@ function Login() {
       const success = await login(email, access_token); // Update store with token and user
       if (success) {
         setError('');
-        navigate('/dashboard');
+        navigate('/exam-requests');
       } else {
         setError('Failed to load user data');
       }

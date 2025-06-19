@@ -15,6 +15,9 @@ import Profile from "./components/Profile";
 import useAuthStore from "./store/authStore";
 import Register from './components/Register'; // Import the Register component
 import ProtectedRoute from './components/ProtectedRoute';
+import SecretariatPanel from './components/SecretariatPanel';
+import RoleProtectedRoute from './components/RoleProtectedRoute';
+import AdminCadrePanel from './components/AdminCadrePanel';
 
 import "./App.css";
 
@@ -32,8 +35,7 @@ function App() {
         <Container>
           <Routes>
             {/* Public routes */}
-            <Route path="/login" element={!isAuthenticated() ? <Login /> : <Navigate to="/dashboard" replace />} />
-            <Route path="/register" element={!isAuthenticated() ? <Register /> : <Navigate to="/dashboard" replace />} />
+            <Route path="/login" element={!isAuthenticated() ? <Login /> : <Navigate to="/exam-requests" replace />} />
             
             {/* Protected routes */}
             <Route path="/dashboard" element={
@@ -46,14 +48,19 @@ function App() {
                 <ExamRequests />
               </ProtectedRoute>
             } />
-            <Route path="/profile" element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
+            <Route path="/secretariat" element={
+              <RoleProtectedRoute allowedTypes={['ADMIN', 'SECRETARY']}>
+                <SecretariatPanel />
+              </RoleProtectedRoute>
+            } />
+            <Route path="/admin-cadre" element={
+              <RoleProtectedRoute allowedTypes={['ADMIN']}>
+                <AdminCadrePanel />
+              </RoleProtectedRoute>
             } />
             
             {/* Redirect root to dashboard if authenticated, otherwise to login */}
-            <Route path="/" element={<Navigate to={isAuthenticated() ? "/dashboard" : "/login"} replace />} />
+            <Route path="/" element={<Navigate to={isAuthenticated() ? "/exam-requests" : "/login"}  />} />
           </Routes>
         </Container>
       </Router>

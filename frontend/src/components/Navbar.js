@@ -6,6 +6,7 @@ import useAuthStore from "../store/authStore";
 function Navbar() {
   const navigate = useNavigate();
   const { logout, isAuthenticated } = useAuthStore();
+  const user = useAuthStore(state => state.user);
 
   const handleLogout = () => {
     logout();
@@ -20,15 +21,22 @@ function Navbar() {
         </Typography>
         {isAuthenticated() && (
           <>
-            <Button color="inherit" component={Link} to="/dashboard">
+            {/* <Button color="inherit" component={Link} to="/dashboard">
               Dashboard
-            </Button>
+            </Button> */}
             <Button color="inherit" component={Link} to="/exam-requests">
-              Exam Requests
+              Programarea examenelor
             </Button>
-            <Button color="inherit" component={Link} to="/profile">
-              Profile
-            </Button>
+            {(user?.type?.toUpperCase() === 'ADMIN' || user?.type?.toUpperCase() === 'SECRETARY') && (
+              <Button color="inherit" component={Link} to="/secretariat">
+                Secretariat Panel
+              </Button>
+            )}
+            {user?.type?.toUpperCase() === 'ADMIN' && (
+              <Button color="inherit" component={Link} to="/admin-cadre">
+                Admin Panel
+              </Button>
+            )}
             <Button color="inherit" onClick={handleLogout}>
               Logout
             </Button>
@@ -39,9 +47,9 @@ function Navbar() {
             <Button color="inherit" component={Link} to="/login">
               Login
             </Button>
-            <Button color="inherit" component={Link} to="/register">
+            {/* <Button color="inherit" component={Link} to="/register">
               Register
-            </Button>
+            </Button> */}
           </>
         )}
       </Toolbar>
